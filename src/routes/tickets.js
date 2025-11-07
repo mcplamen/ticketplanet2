@@ -2,6 +2,11 @@
 import express from "express";
 import prisma from "../prismaClient.js";
 import { createGooglePass } from "../services/google-wallet.js";
+import QRCode from "qrcode";
+import { generateTicketPDF } from "../services/pdfTicketService.js";
+import path from "path";
+import fs from "fs";
+
 
 const router = express.Router();
 
@@ -59,5 +64,58 @@ router.post("/generate-ticket", async (req, res) => {
     res.status(500).json({ success: false, error: "Server error" });
   }
 });
+
+router.post("/generate", authMiddleware, async (req, res) => {
+  const { eventId } = req.body;
+
+  const ticket = await prisma.ticket.create({
+    data: {
+      eventId,
+      ownerId: req.user.id
+    }
+  });
+
+  const qrData = `http://localhost:3000/tickets/validate/${ticket.id}`;
+  const qrImage = await QRCode.toDataURL(qrData);
+
+  res.json({ ticket, qr: qrImage });
+});
+
+router.get("/validate/:ticketId", async (req, res) => {
+  const { ticketId } = req.params;
+
+  const ticket = await prisma.ticket.findUnique({
+    where: { id: Number(ticketId) },
+    include: { event: true, owner: true }
+  });
+
+  if (!ticket) return res.status(404).json({ valid: false });
+
+  res.json({
+    valid: true,
+    event: ticket.event.title,
+    owner: ticket.owner.email
+  });
+});
+
+router.get("/download/:ticketId", authMiddleware, async (req, res) => {
+  const { ticketId } = req.params;
+
+  const ticket = await prisma.ticket.findUnique({
+    where: { id: Number(ticketId) },
+    include: { event: true, owner: true }
+  });
+
+  if (!ticket) return res.status(404).json({ message: "Ticket not found" });
+
+  if (ticket.ownerId !== req.user.id) {
+    return res.status(403).json({ message: "Access denied" });
+  }
+
+  const pdfPath = await generateTicketPDF(ticket, ticket.event, ticket.owner);
+
+  res.download(pdfPath);
+});
+
 
 export default router;

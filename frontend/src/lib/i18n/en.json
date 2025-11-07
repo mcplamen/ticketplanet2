@@ -1,0 +1,14 @@
+{
+  "welcome": {
+    "title": "Welcome to TicketPlanet",
+    "description": "Create and distribute event tickets easily."
+  },
+  "nav": {
+    "events": "Events",
+    "create": "Create event"
+  },
+  "auth": {
+    "login": "Login",
+    "register": "Register"
+  }
+}
